@@ -1,0 +1,8 @@
+build/
+.gradle/
+.DS_Store
+.agents/
+*.apk
+*.idsig
+*.p12
+local.properties
