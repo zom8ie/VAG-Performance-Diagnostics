@@ -15,6 +15,7 @@ public final class ConnectionService extends Service implements Engine.State {
     public volatile String message="Нет подключения",deviceName="Viecar";
     public volatile boolean ready,connecting,ecuReady;public volatile long revision,rowEpoch;
     private final LinkedHashMap<String,Engine.Row> rows=new LinkedHashMap<>();
+    private String rowsMode=Engine.IDLE;
     private volatile BluetoothSocket socket;private volatile Elm.StreamWire wire;
     private volatile Engine engine;public volatile Journal journal;private volatile boolean stopping;
     private String wantedMode=Engine.IDLE;
@@ -57,7 +58,7 @@ public final class ConnectionService extends Service implements Engine.State {
             AdapterPicker.settings(this).edit().putBoolean("connectionWanted",false).apply();
             stopSelf();return START_NOT_STICKY;
         }
-        if(thread!=null)return START_NOT_STICKY;
+        if(thread!=null&&thread.isAlive())return START_NOT_STICKY;
         setPhoneInForeground(intent.getBooleanExtra("phoneInForeground",false));
         String address=intent.getStringExtra("address");deviceName=intent.getStringExtra("name");
         if(deviceName==null)deviceName="Viecar";
@@ -182,16 +183,21 @@ public final class ConnectionService extends Service implements Engine.State {
     synchronized void showDashboard(DashboardReadings.Plan plan){
         dashboard=plan;
         if(journal!=null)journal.record("dashboard_attached","",plan==null?"screen_detached":String.join(", ",plan.routes.keySet()),0);
-        if(engine!=null)engine.setDashboard(plan);
+        if(engine!=null){
+            if(plan!=null)for(Engine.Row row:rows.values())plan.acceptPhoneSample(rowsMode,row);
+            engine.setDashboard(plan);
+        }
     }
     synchronized void hideDashboard(DashboardReadings.Plan plan){
         if(dashboard==plan)showDashboard(null);
     }
     @Override public synchronized void row(Engine.Row row){
+        rowsMode=engine==null?Engine.IDLE:engine.activeMode();
         rows.put(row.key,MeasurementRetention.keepLastSuccessful(rows.get(row.key),row));
+        if(dashboard!=null)dashboard.acceptPhoneSample(rowsMode,row);
         revision++;
     }
-    @Override public synchronized void clear(){rows.clear();rowEpoch++;revision++;}
+    @Override public synchronized void clear(){rows.clear();rowsMode=Engine.IDLE;rowEpoch++;revision++;}
     @Override public void status(String s,boolean r){message=s;ready=r;if(r)ecuReady=true;revision++;}
     @Override public void failure(String m){status("Ошибка: "+m,false);if(journal!=null)try{journal.record("error","",m,0);}catch(Exception ignored){}}
 

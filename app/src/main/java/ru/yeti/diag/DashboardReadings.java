@@ -24,6 +24,13 @@ final class DashboardReadings {
         boolean contains(String mode,String key){
             return routes.getOrDefault(mode,Collections.emptySet()).contains(key);
         }
+
+        void acceptPhoneSample(String mode,Engine.Row row){
+            String source=mode;
+            if(mode.equals(Engine.COMBINED_ENGINE))
+                source=row.key.startsWith("g")?"ECM":"OBD";
+            if(contains(source,row.key))receiver.accept(source,row);
+        }
     }
 
     static final class Sample {

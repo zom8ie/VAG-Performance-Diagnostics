@@ -5,6 +5,8 @@ import static ru.yeti.diag.TestChecks.*;
 
 final class DashboardTest {
     static void run(){
+        checkConnectionPolicy();
+        checkPhoneSamplesReachDashboard();
         checkPresentation();
         checkDemoReadings();
         DashboardCatalog.Parameter rpm=DashboardCatalog.find("OBD/pid12");
@@ -75,6 +77,36 @@ final class DashboardTest {
         checkOneObdDiscoveryAcrossDashboardRoutes(rpm,true);
         checkDashboardKeepsTp20DuringObdBackoff(rpm);
         checkSwitchPageDuringRead(rpm);
+    }
+
+    private static void checkConnectionPolicy(){
+        DashboardConnection retry=new DashboardConnection();
+        check(!retry.shouldStart(0,true,true,true,true),"an active phone connection is reused by the car screen");
+        check(!retry.shouldStart(0,false,false,true,true),"an explicit disconnect prevents automatic restart");
+        check(!retry.shouldStart(0,false,true,false,true)
+            &&!retry.shouldStart(0,false,true,true,false),"startup waits for a selected adapter and Bluetooth permission");
+        check(retry.shouldStart(0,false,true,true,true),"opening the car screen can restore an inactive connection");
+        check(!retry.shouldStart(DashboardConnection.RETRY_MS-1,false,true,true,true)
+            &&retry.shouldStart(DashboardConnection.RETRY_MS,false,true,true,true),
+            "a failed connection start is retried at a bounded rate");
+    }
+
+    private static void checkPhoneSamplesReachDashboard(){
+        DashboardReadings readings=new DashboardReadings();
+        DashboardCatalog.Parameter rpm=DashboardCatalog.find("OBD/pid12");
+        DashboardCatalog.Parameter boost=DashboardCatalog.find("ECM/g115f2");
+        DashboardReadings.Plan plan=new DashboardReadings.Plan(Arrays.asList(rpm,boost),readings::record);
+        Engine.Row phoneRpm=new Engine.Row("pid12","Обороты","Основные","800","об/мин","");
+        Engine.Row phoneBoost=new Engine.Row("g115f2","Наддув","Измерения","1","бар","");
+        plan.acceptPhoneSample(Engine.COMBINED_ENGINE,phoneRpm);
+        plan.acceptPhoneSample(Engine.COMBINED_ENGINE,phoneBoost);
+        check(readings.sample(rpm.id).value.equals("800 об/мин")
+            &&readings.sample(boost.id).value.equals("1 бар"),
+            "phone engine samples populate both OBD and TP2.0 dashboard cells");
+        plan.acceptPhoneSample("DSG",new Engine.Row("g115f2","Другая группа","Измерения","9","бар",""));
+        plan.acceptPhoneSample(Engine.PARTIAL_ANALYSIS,new Engine.Row("OBD/pid12","Анализ","Анализ","900","об/мин",""));
+        check(readings.sample(boost.id).value.equals("1 бар")&&readings.sample(rpm.id).value.equals("800 об/мин"),
+            "samples from a different controller and analysis rows cannot fill a selected cell");
     }
 
     private static void checkPresentation(){
