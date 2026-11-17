@@ -23,6 +23,9 @@ import android.window.OnBackInvokedDispatcher;
 import static ru.yeti.diag.UiWidgets.*;
 
 public final class MainActivity extends Activity {
+    private static volatile boolean foreground;
+
+    static boolean isForeground(){return foreground;}
 
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final UiWidgets ui=new UiWidgets(this);
@@ -63,11 +66,13 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        foreground=true;
         ConnectionService service=ConnectionService.current;
         if(service!=null)service.setPhoneInForeground(true);
         handler.post(refresh);
     }
     @Override protected void onPause(){
+        foreground=false;
         handler.removeCallbacks(refresh);
         ConnectionService service=ConnectionService.current;
         if(service!=null)service.setPhoneInForeground(false);

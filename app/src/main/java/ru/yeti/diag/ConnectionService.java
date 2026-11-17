@@ -59,7 +59,7 @@ public final class ConnectionService extends Service implements Engine.State {
             stopSelf();return START_NOT_STICKY;
         }
         if(thread!=null&&thread.isAlive())return START_NOT_STICKY;
-        setPhoneInForeground(intent.getBooleanExtra("phoneInForeground",false));
+        setPhoneInForeground(MainActivity.isForeground()||intent.getBooleanExtra("phoneInForeground",false));
         String address=intent.getStringExtra("address");deviceName=intent.getStringExtra("name");
         if(deviceName==null)deviceName="Viecar";
         NotificationManager nm=getSystemService(NotificationManager.class);
@@ -67,13 +67,14 @@ public final class ConnectionService extends Service implements Engine.State {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,ConnectionService.class).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE);
         Notification notification=new Notification.Builder(this,"connection").setSmallIcon(R.drawable.ic_car).setContentTitle("Yeti · чтение параметров")
-            .setContentText("Журнал начнёт записываться после подключения.").setContentIntent(open).setOngoing(true).addAction(new Notification.Action.Builder(null,"Отключить",stop).build()).build();
+            .setContentText("Подключение к адаптеру · журнал включён.").setContentIntent(open).setOngoing(true).addAction(new Notification.Action.Builder(null,"Отключить",stop).build()).build();
         startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
         try{
             journal=new Journal(this);
             journal.record("analysis_progress","restore","verified_checks="+verifiedPartialChecks.size(),0);
             journal.record("connection_request",intent.getBooleanExtra("phoneInForeground",false)?"phone":"android_auto",
                 "Начато подключение к выбранному адаптеру",0);
+            if(dashboard!=null)journal.record("dashboard_attached","",String.join(", ",dashboard.routes.keySet()),0);
         }catch(IOException e){
             failure("Не удалось открыть журнал подключения: "+e.getMessage());
             stopSelf();return START_NOT_STICKY;
